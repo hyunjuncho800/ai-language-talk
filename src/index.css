@@ -1,0 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: #fbf9f5;
+    color: #1b1c1a;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+@layer utilities {
+  .soft-shadow {
+    box-shadow: 0 4px 20px rgba(58, 53, 48, 0.05);
+  }
+  .nursery-gradient {
+    background: linear-gradient(135deg, #fbf9f5 0%, #f5f3ef 100%);
+  }
+}
