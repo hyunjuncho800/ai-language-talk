@@ -29,14 +29,19 @@ export default function Header() {
           </Link>
         </div>
         <div className="hidden md:flex items-center gap-stack-xl">
-          <Link to="#about" className={getLinkClass('#about')}>서비스 소개</Link>
-          <Link to="#program" className={getLinkClass('#program')}>발달 프로그램</Link>
-          <Link to="#matching" className={getLinkClass('#matching')}>사회성 매칭</Link>
-          <Link to="#clinical" className={getLinkClass('#clinical')}>임상가 전용</Link>
+          <a href="/#about" className={getLinkClass('#about')}>서비스 소개</a>
+          <a href="/#program" className={getLinkClass('#program')}>발달 프로그램</a>
+          <a href="/#matching" className={getLinkClass('#matching')}>사회성 매칭</a>
+          <a href="/#clinical" className={getLinkClass('#clinical')}>임상가 전용</a>
         </div>
-        <Link to="/screening" className="bg-primary text-on-primary px-6 py-3 rounded-2xl font-label-md text-label-md hover:bg-primary-container transition-all duration-300 soft-shadow hover:scale-105 active:scale-95">
-          무료 발달 스크리닝
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link to="/parent-dashboard" className="hidden sm:flex text-primary font-label-md text-label-md hover:bg-primary/10 px-4 py-2.5 rounded-2xl transition-all duration-300">
+            부모 전용 홈티
+          </Link>
+          <Link to="/screening" className="bg-primary text-on-primary px-6 py-3 rounded-2xl font-label-md text-label-md hover:bg-primary-container transition-all duration-300 soft-shadow hover:scale-105 active:scale-95">
+            무료 발달 스크리닝
+          </Link>
+        </div>
       </nav>
     </header>
   );
