@@ -23,7 +23,11 @@ export default function ParentDashboard() {
   };
 
   return (
-    <main className="max-w-3xl mx-auto px-margin-mobile md:px-margin-desktop py-stack-xl space-y-stack-xl bg-background min-h-screen pb-32">
+    <main className="relative bg-background overflow-hidden min-h-screen pb-32">
+      <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-primary-container/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 z-0 pointer-events-none"></div>
+      <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-secondary-container/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/4 z-0 pointer-events-none"></div>
+      
+      <div className="relative max-w-3xl mx-auto px-margin-mobile md:px-margin-desktop py-stack-xl space-y-stack-xl z-10">
       
       {/* Title */}
       <div className="pt-4 pb-2">
@@ -166,6 +170,8 @@ export default function ParentDashboard() {
 
         </div>
       </section>
+      
+      </div>
 
     </main>
   );
