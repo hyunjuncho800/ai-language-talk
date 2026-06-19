@@ -29,14 +29,68 @@ const playPopSound = () => {
   }
 };
 
+// 동네별 수동 선택 데이터를 위한 매핑 정보
+const regionData = {
+  '부산광역시': ['기장군 정관읍', '수영구 망미동', '해운대구 우동', '금정구 장전동'],
+  '서울특별시': ['마포구 서교동', '강남구 역삼동', '종로구 혜화동', '송파구 잠실동'],
+  '경기도': ['성남시 분당구 삼평동', '수원시 영통구 이의동', '고양시 일산동구 장항동']
+};
+
+// 동네이름 키워드별 실시간 매칭 상태 통계 Mock 데이터 반환 함수
+const getRegionStats = (name) => {
+  if (name.includes('정관읍')) {
+    return { count: 10, text: '표현언어 1~2세 수준, 사회성 향상 및 자존감 촉진 대기 아동 10명 대기 중!' };
+  }
+  if (name.includes('망미동')) {
+    return { count: 7, text: '수용언어 2~3세 수준, 또래 의사소통 및 정서 안정을 위한 아동 7명 대기 중!' };
+  }
+  if (name.includes('우동')) {
+    return { count: 14, text: '조음 발달 및 발음 교정, 자신감 회복을 기다리는 아동 14명 대기 중!' };
+  }
+  if (name.includes('장전동')) {
+    return { count: 8, text: '언어 발달 지연 및 사회적 차례 지키기를 희망하는 아동 8명 대기 중!' };
+  }
+  if (name.includes('서교동')) {
+    return { count: 15, text: '표현언어 및 문장 표현력 확장, 또래 관계 형성을 원하는 아동 15명 대기 중!' };
+  }
+  if (name.includes('역삼동')) {
+    return { count: 18, text: '수용언어 3~4세 수준, 감정 인지 및 자존감 증진 대기 아동 18명 대기 중!' };
+  }
+  if (name.includes('혜화동')) {
+    return { count: 6, text: '조음 장애 및 발음 지연 극복, 상호 작용을 대기하는 아동 6명 대기 중!' };
+  }
+  if (name.includes('잠실동')) {
+    return { count: 12, text: '언어 발달 촉진 및 사회 규칙 학습을 위한 아동 12명 대기 중!' };
+  }
+  if (name.includes('삼평동')) {
+    return { count: 11, text: '표현언어 발달 지연 및 대인 관계 능력 배양 대기 아동 11명 대기 중!' };
+  }
+  if (name.includes('이의동')) {
+    return { count: 9, text: '수용언어 지연 및 놀이 상황 상호작용 연습 아동 9명 대기 중!' };
+  }
+  if (name.includes('장항동')) {
+    return { count: 13, text: '조음 및 대화 턴테이킹 기술 훈련을 기다리는 아동 13명 대기 중!' };
+  }
+  // 기본 폴백 데이터
+  return { count: 10, text: '표현언어 1~2세 수준, 사회성 향상 및 자존감 촉진 대기 아동 10명 대기 중!' };
+};
+
 export default function SocialMatching() {
   // 위치 상태
   const [locationName, setLocationName] = useState('위치 정보를 탐색하고 있어요...');
   const [isLoadingLocation, setIsLoadingLocation] = useState(true);
   const [locationStatus, setLocationStatus] = useState('pending'); // pending, success, error
 
+  // 수동 동네 변경 모달 상태
+  const [isRegionModalOpen, setIsRegionModalOpen] = useState(false);
+  const [tempSido, setTempSido] = useState('부산광역시');
+  const [tempGugundong, setTempGugundong] = useState('기장군 정관읍');
+  
+  // 지도 데이터 갱신을 위한 새로고침(로딩) 애니메이션 상태
+  const [isMapRefreshing, setIsMapRefreshing] = useState(false);
+
   // 드래그(Pan) 상태 (지도 이동용)
-  const [mapOffset, setMapOffset] = useState({ x: -100, y: -80 }); // 지도가 처음에 중앙 근처에 오도록 오프셋 지정
+  const [mapOffset, setMapOffset] = useState({ x: -100, y: -80 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const mapContainerRef = useRef(null);
@@ -54,7 +108,7 @@ export default function SocialMatching() {
   // 클릭된 캐릭터 미니 정보 상태
   const [selectedCharacter, setSelectedCharacter] = useState(null);
 
-  // 모달 상태
+  // 모달 상태 (맞춤형 그룹 개설)
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [formData, setFormData] = useState({
@@ -77,7 +131,6 @@ export default function SocialMatching() {
       async (position) => {
         const { latitude, longitude } = position.coords;
         try {
-          // OpenStreetMap Nominatim API 호출 (비식별화된 동 정보 수집용)
           const response = await fetch(
             `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lng=${longitude}&zoom=18&addressdetails=1&accept-language=ko`,
             { headers: { 'User-Agent': 'CocoTalk-Social-Matching-Agent' } }
@@ -88,12 +141,12 @@ export default function SocialMatching() {
           
           if (data && data.address) {
             const addr = data.address;
-            // 행정동 단위 추출 우선순위: suburb (동), town (읍), village (면), neighborhood (동네)
             const dong = addr.suburb || addr.town || addr.village || addr.neighborhood || addr.city_district || '';
             const gu = addr.city_district || addr.county || addr.city || '';
             
             if (gu || dong) {
-              setLocationName(`${gu} ${dong}`.trim());
+              const parsedName = `${gu} ${dong}`.trim();
+              setLocationName(parsedName);
               setLocationStatus('success');
             } else {
               setLocationName('부산 기장군 정관읍');
@@ -105,7 +158,6 @@ export default function SocialMatching() {
           }
         } catch (error) {
           console.error('역지오코딩 API 호출 오류. 폴백을 작동합니다.', error);
-          // 한국 내 주요 위경도 근처일 경우 대략적인 목(Mock) 주소 부여
           if (latitude > 35 && latitude < 36 && longitude > 129 && longitude < 130) {
             setLocationName('부산 기장군 정관읍');
           } else if (latitude > 37 && latitude < 38 && longitude > 126 && longitude < 127) {
@@ -128,6 +180,29 @@ export default function SocialMatching() {
     );
   }, []);
 
+  // 시도 선택 변경 시 구군동 리스트의 첫 번째 값으로 기본 세팅
+  const handleSidoChange = (sido) => {
+    setTempSido(sido);
+    if (regionData[sido] && regionData[sido].length > 0) {
+      setTempGugundong(regionData[sido][0]);
+    }
+  };
+
+  // 수동 지역 변경 확인 완료 버튼 처리
+  const handleConfirmRegion = () => {
+    playPopSound();
+    setIsRegionModalOpen(false);
+    setIsMapRefreshing(true); // 맵 새로고침 인디케이터 활성화
+
+    // 0.6초 뒤 맵 데이터를 새 지역으로 업데이트 완료
+    setTimeout(() => {
+      setLocationName(`${tempSido} ${tempGugundong}`);
+      setIsMapRefreshing(false);
+      // 캐릭터 상세 정보가 열려있다면 닫아준다
+      setSelectedCharacter(null);
+    }, 600);
+  };
+
   // 드래그(Pan) 핸들러
   const handleMouseDown = (e) => {
     if (e.target.closest('.interactive-btn') || e.target.closest('.character-pin')) return;
@@ -147,7 +222,6 @@ export default function SocialMatching() {
     setIsDragging(false);
   };
 
-  // 터치 스크린용 드래그 핸들러
   const handleTouchStart = (e) => {
     if (e.target.closest('.interactive-btn') || e.target.closest('.character-pin')) return;
     setIsDragging(true);
@@ -164,13 +238,15 @@ export default function SocialMatching() {
     });
   };
 
-  // 모달 폼 제출
   const handleFormSubmit = (e) => {
     e.preventDefault();
     playPopSound();
     setIsModalOpen(false);
     setIsSuccessModalOpen(true);
   };
+
+  // 현재 지역 명칭에 따른 말풍선 상태 추출
+  const currentStats = getRegionStats(locationName);
 
   return (
     <div className="min-h-screen bg-[#fbf9f5] py-8 px-4 sm:px-6 md:px-margin-desktop text-on-background font-body-md">
@@ -186,9 +262,9 @@ export default function SocialMatching() {
           </p>
         </div>
 
-        {/* 위치 표시 배너 */}
-        <div className="flex justify-center md:justify-end">
-          <div className="bg-white px-5 py-3 rounded-full shadow-sm border border-outline-variant flex items-center gap-2.5 animate-pulse hover:shadow-md transition-all duration-300">
+        {/* 위치 표시 및 동네 바꾸기 버튼 */}
+        <div className="flex flex-col sm:flex-row items-center justify-center md:justify-end gap-3 shrink-0">
+          <div className="bg-white px-5 py-3 rounded-full shadow-sm border border-outline-variant flex items-center gap-2.5 hover:shadow-md transition-all duration-300">
             <span className="text-xl">📍</span>
             <span className="font-semibold text-sm sm:text-base text-primary">현재 탐색 지역:</span>
             <span className="font-bold text-sm sm:text-base text-on-surface">
@@ -198,6 +274,16 @@ export default function SocialMatching() {
               <span className="inline-block w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></span>
             )}
           </div>
+          
+          <button
+            onClick={() => {
+              playPopSound();
+              setIsRegionModalOpen(true);
+            }}
+            className="interactive-btn flex items-center gap-1.5 px-5 py-3 bg-white hover:bg-primary/5 text-primary border-2 border-primary/30 rounded-full font-bold text-sm sm:text-base transition-all duration-200 shadow-sm active:scale-95"
+          >
+            <span>동네 바꾸기 🔄</span>
+          </button>
         </div>
       </div>
 
@@ -209,6 +295,16 @@ export default function SocialMatching() {
           <div className="absolute top-4 left-4 z-10 bg-white/90 backdrop-blur-md px-4 py-2.5 rounded-[18px] text-xs font-semibold text-on-surface-variant shadow-sm pointer-events-none select-none flex items-center gap-2">
             <span>🖱️ 마우스 드래그 / 터치로 지도를 밀어서 구석구석 탐색해 보세요!</span>
           </div>
+
+          {/* 맵 데이터 실시간 새로고침 로딩 오버레이 */}
+          {isMapRefreshing && (
+            <div className="absolute inset-0 z-50 bg-white/60 backdrop-blur-md flex flex-col items-center justify-center animate-fade-in">
+              <div className="w-14 h-14 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4"></div>
+              <p className="font-bold text-primary text-base sm:text-lg animate-pulse">
+                🔍 {tempGugundong}의 짝꿍 지도를 동적으로 동기화하고 있어요...
+              </p>
+            </div>
+          )}
 
           {/* 맵 무한 캔버스 컨테이너 */}
           <div
@@ -314,22 +410,22 @@ export default function SocialMatching() {
               {/* 랜드마크 건물 & 이모지 표현 */}
               <g transform="translate(290, 140)">
                 <text x="0" y="0" fontSize="48">🏫</text>
-                <text x="-20" y="20" fontSize="12" fill="#637048" fontWeight="bold" fontFamily="sans-serif">정관 어린이집</text>
+                <text x="-20" y="20" fontSize="12" fill="#637048" fontWeight="bold" fontFamily="sans-serif">마을 유치원</text>
               </g>
               
               <g transform="translate(1120, 220)">
                 <text x="0" y="0" fontSize="48">🎠</text>
-                <text x="-15" y="25" fontSize="12" fill="#637048" fontWeight="bold" fontFamily="sans-serif">꿈나무 놀이터</text>
+                <text x="-15" y="25" fontSize="12" fill="#637048" fontWeight="bold" fontFamily="sans-serif">어린이 공원</text>
               </g>
 
               <g transform="translate(1300, 880)">
                 <text x="0" y="0" fontSize="56">⛲</text>
-                <text x="-20" y="30" fontSize="12" fill="#637048" fontWeight="bold" fontFamily="sans-serif">중앙 물빛공원</text>
+                <text x="-20" y="30" fontSize="12" fill="#637048" fontWeight="bold" fontFamily="sans-serif">중앙 수변공원</text>
               </g>
 
               <g transform="translate(680, 480)">
                 <text x="0" y="0" fontSize="48">🏥</text>
-                <text x="-20" y="25" fontSize="12" fill="#637048" fontWeight="bold" fontFamily="sans-serif">코코아동 발달센터</text>
+                <text x="-20" y="25" fontSize="12" fill="#637048" fontWeight="bold" fontFamily="sans-serif">코코언어 발달센터</text>
               </g>
 
               {/* 군데군데 예쁜 아이콘 */}
@@ -349,12 +445,12 @@ export default function SocialMatching() {
             {/* 실시간 매칭 상태 말풍선 & CTA 버튼 (지도 중앙 근처에 배치) */}
             <div className="absolute left-[380px] top-[400px] flex flex-col items-center gap-3 z-20 pointer-events-auto">
               {/* 말풍선 */}
-              <div className="neon-glow-card bg-white/95 backdrop-blur-md px-6 py-4 rounded-[22px] max-w-[340px] text-center shadow-lg relative transform hover:scale-105 transition-all duration-300">
+              <div className="neon-glow-card bg-white/95 backdrop-blur-md px-6 py-4 rounded-[22px] max-w-[340px] text-center shadow-lg relative transform hover:scale-105 transition-all duration-300 animate-fade-in">
                 <span className="font-extrabold text-sm sm:text-base text-primary block mb-1">
                   📌 {locationName} 매칭 대기 현황
                 </span>
                 <p className="text-on-surface-variant font-medium text-xs sm:text-sm leading-relaxed">
-                  표현언어 1~2세 수준, 사회성 향상 및 자존감 촉진 대기 아동 <span className="text-[#075fab] font-bold">10명</span> 대기 중!
+                  {currentStats.text}
                 </p>
                 {/* 말풍선 꼬리 */}
                 <div className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 w-5 h-5 bg-white border-r-2 border-b-2 border-primary/30 rotate-45"></div>
@@ -399,7 +495,7 @@ export default function SocialMatching() {
             ))}
           </div>
 
-          {/* 캐릭터 상세 프로필 팝업 (모달/카드 형식으로 지도 우측 상단 오버레이) */}
+          {/* 캐릭터 상세 프로필 팝업 (지도 우측 하단 오버레이) */}
           {selectedCharacter && (
             <div className="absolute bottom-4 right-4 z-40 bg-white/95 backdrop-blur-md p-5 rounded-[22px] shadow-2xl border border-outline-variant w-[280px] sm:w-[320px] animate-fade-in transition-all">
               <div className="flex justify-between items-start mb-3.5">
@@ -497,6 +593,82 @@ export default function SocialMatching() {
           </div>
         </div>
       </div>
+
+      {/* [NEW] 수동 지역 선택 모달 팝업 */}
+      {isRegionModalOpen && (
+        <div className="fixed inset-0 bg-black/55 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+          <div className="bg-white w-full max-w-md rounded-[24px] shadow-2xl border border-outline-variant overflow-hidden animate-scale-up">
+            
+            {/* 헤더 */}
+            <div className="bg-gradient-to-r from-primary/10 to-[#5d9cec]/10 px-6 py-5 border-b border-surface-container flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">🗺️</span>
+                <h3 className="text-lg font-extrabold text-primary font-headline-md">
+                  우리 동네 대기 현황 확인하기
+                </h3>
+              </div>
+              <button
+                onClick={() => {
+                  playPopSound();
+                  setIsRegionModalOpen(false);
+                }}
+                className="interactive-btn text-on-surface-variant hover:text-primary transition-colors text-2xl font-bold p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* 본문 폼 */}
+            <div className="p-6 space-y-5">
+              <p className="text-on-surface-variant text-sm leading-relaxed font-medium">
+                GPS 오차가 있거나 다른 동네의 매칭 현황을 보고 싶으시다면 아래에서 선택해 주세요.
+              </p>
+
+              {/* 시/도 선택 */}
+              <div>
+                <label className="block text-sm font-bold text-on-surface mb-2">
+                  시 / 도 선택
+                </label>
+                <select
+                  value={tempSido}
+                  onChange={(e) => handleSidoChange(e.target.value)}
+                  className="w-full bg-[#fbf9f5] border border-outline-variant rounded-[16px] px-4 py-3.5 text-sm font-semibold outline-none focus:border-primary transition-colors cursor-pointer"
+                >
+                  {Object.keys(regionData).map((sido) => (
+                    <option key={sido} value={sido}>{sido}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 구/군/동 선택 */}
+              <div>
+                <label className="block text-sm font-bold text-on-surface mb-2">
+                  구 / 군 / 동 선택
+                </label>
+                <select
+                  value={tempGugundong}
+                  onChange={(e) => setTempGugundong(e.target.value)}
+                  className="w-full bg-[#fbf9f5] border border-outline-variant rounded-[16px] px-4 py-3.5 text-sm font-semibold outline-none focus:border-primary transition-colors cursor-pointer"
+                >
+                  {regionData[tempSido]?.map((gugundong) => (
+                    <option key={gugundong} value={gugundong}>{gugundong}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 확인 버튼 */}
+              <div className="pt-2">
+                <button
+                  onClick={handleConfirmRegion}
+                  className="w-full py-3.5 bg-primary text-white font-extrabold rounded-[18px] text-base hover:bg-primary-container hover:scale-[1.02] active:scale-95 transition-all duration-300 shadow-md flex items-center justify-center gap-2"
+                >
+                  <span>확인</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 4. 모달: 내 아이 맞춤형 짝꿍 그룹 개설 폼 */}
       {isModalOpen && (
