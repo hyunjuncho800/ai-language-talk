@@ -23,4 +23,106 @@
   .nursery-gradient {
     background: linear-gradient(135deg, #fbf9f5 0%, #f5f3ef 100%);
   }
+  
+  /* Neon Glow for Tooltip */
+  .neon-glow-card {
+    box-shadow: 0 0 15px rgba(7, 95, 171, 0.2), 0 0 30px rgba(7, 95, 171, 0.1);
+    border: 2px solid rgba(7, 95, 171, 0.3);
+  }
+  
+  /* Pulse Glow for CTA */
+  .pulse-glow {
+    animation: pulse-glow-ani 2s infinite;
+  }
+  
+  @keyframes pulse-glow-ani {
+    0% {
+      box-shadow: 0 0 0 0 rgba(7, 95, 171, 0.4);
+      transform: scale(1);
+    }
+    70% {
+      box-shadow: 0 0 0 15px rgba(7, 95, 171, 0);
+      transform: scale(1.02);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgba(7, 95, 171, 0);
+      transform: scale(1);
+    }
+  }
+
+  /* Character Bouncing on Hover */
+  .character-bounce:hover {
+    animation: char-bounce 0.6s infinite alternate;
+  }
+  
+  @keyframes char-bounce {
+    0% {
+      transform: translateY(0) scale(1.1);
+    }
+    100% {
+      transform: translateY(-12px) scale(1.1);
+    }
+  }
+
+  /* Walking Animations along Paths */
+  .walk-1 {
+    animation: walk-path-1 25s infinite linear;
+  }
+  .walk-2 {
+    animation: walk-path-2 30s infinite linear;
+  }
+  .walk-3 {
+    animation: walk-path-3 28s infinite linear;
+  }
+  .walk-4 {
+    animation: walk-path-4 35s infinite linear;
+  }
+  .walk-5 {
+    animation: walk-path-5 24s infinite linear;
+  }
+  .walk-6 {
+    animation: walk-path-6 32s infinite linear;
+  }
+
+  /* Path 1: Diamond shape loop */
+  @keyframes walk-path-1 {
+    0%, 100% { left: 25%; top: 35%; }
+    25% { left: 45%; top: 25%; }
+    50% { left: 65%; top: 35%; }
+    75% { left: 45%; top: 55%; }
+  }
+
+  /* Path 2: Oval shape loop */
+  @keyframes walk-path-2 {
+    0%, 100% { left: 15%; top: 60%; }
+    33% { left: 35%; top: 75%; }
+    66% { left: 55%; top: 65%; }
+  }
+
+  /* Path 3: S-Curve loop */
+  @keyframes walk-path-3 {
+    0%, 100% { left: 75%; top: 20%; }
+    25% { left: 60%; top: 40%; }
+    50% { left: 80%; top: 55%; }
+    75% { left: 90%; top: 35%; }
+  }
+
+  /* Path 4: Horizontal patrol */
+  @keyframes walk-path-4 {
+    0%, 100% { left: 10%; top: 20%; }
+    50% { left: 85%; top: 20%; }
+  }
+
+  /* Path 5: Triangle shape loop */
+  @keyframes walk-path-5 {
+    0%, 100% { left: 70%; top: 70%; }
+    33% { left: 85%; top: 85%; }
+    66% { left: 60%; top: 90%; }
+  }
+
+  /* Path 6: Vertical patrol */
+  @keyframes walk-path-6 {
+    0%, 100% { left: 50%; top: 45%; }
+    50% { left: 50%; top: 80%; }
+  }
 }

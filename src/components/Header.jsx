@@ -31,7 +31,7 @@ export default function Header() {
         <div className="hidden md:flex items-center gap-stack-xl">
           <a href="/#about" className={getLinkClass('#about')}>서비스 소개</a>
           <a href="/#program" className={getLinkClass('#program')}>발달 프로그램</a>
-          <a href="/#matching" className={getLinkClass('#matching')}>사회성 매칭</a>
+          <Link to="/social-matching" className={getLinkClass('/social-matching')}>사회성 매칭</Link>
           <a href="/#clinical" className={getLinkClass('#clinical')}>임상가 전용</a>
           <Link to="/parent-dashboard" className={getLinkClass('/parent-dashboard')}>부모 전용 홈티</Link>
         </div>
