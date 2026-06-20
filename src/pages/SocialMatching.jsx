@@ -38,41 +38,47 @@ const regionData = {
 
 // 동네이름 키워드별 실시간 매칭 상태 통계 Mock 데이터 반환 함수
 const getRegionStats = (name) => {
-  if (name.includes('정관읍')) {
+  const cleanName = name.replace('(GPS 미지원 브라우저)', '').trim();
+  const parts = cleanName.split(' ');
+  const localName = parts[parts.length - 1] || cleanName;
+
+  if (localName.includes('정관읍')) {
     return { count: 10, text: '표현언어 1~2세 수준, 사회성 향상 및 자존감 촉진 대기 아동 10명 대기 중!' };
   }
-  if (name.includes('망미동')) {
+  if (localName.includes('망미동')) {
     return { count: 7, text: '수용언어 2~3세 수준, 또래 의사소통 및 정서 안정을 위한 아동 7명 대기 중!' };
   }
-  if (name.includes('우동')) {
+  if (localName.includes('우동') || localName.includes('자이')) {
     return { count: 14, text: '조음 발달 및 발음 교정, 자신감 회복을 기다리는 아동 14명 대기 중!' };
   }
-  if (name.includes('장전동')) {
+  if (localName.includes('장전동')) {
     return { count: 8, text: '언어 발달 지연 및 사회적 차례 지키기를 희망하는 아동 8명 대기 중!' };
   }
-  if (name.includes('서교동')) {
+  if (localName.includes('서교동')) {
     return { count: 15, text: '표현언어 및 문장 표현력 확장, 또래 관계 형성을 원하는 아동 15명 대기 중!' };
   }
-  if (name.includes('역삼동')) {
+  if (localName.includes('역삼동')) {
     return { count: 18, text: '수용언어 3~4세 수준, 감정 인지 및 자존감 증진 대기 아동 18명 대기 중!' };
   }
-  if (name.includes('혜화동')) {
+  if (localName.includes('혜화동')) {
     return { count: 6, text: '조음 장애 및 발음 지연 극복, 상호 작용을 대기하는 아동 6명 대기 중!' };
   }
-  if (name.includes('잠실동')) {
+  if (localName.includes('잠실동')) {
     return { count: 12, text: '언어 발달 촉진 및 사회 규칙 학습을 위한 아동 12명 대기 중!' };
   }
-  if (name.includes('삼평동')) {
+  if (localName.includes('삼평동')) {
     return { count: 11, text: '표현언어 발달 지연 및 대인 관계 능력 배양 대기 아동 11명 대기 중!' };
   }
-  if (name.includes('이의동')) {
+  if (localName.includes('이의동')) {
     return { count: 9, text: '수용언어 지연 및 놀이 상황 상호작용 연습 아동 9명 대기 중!' };
   }
-  if (name.includes('장항동')) {
+  if (localName.includes('장항동')) {
     return { count: 13, text: '조음 및 대화 턴테이킹 기술 훈련을 기다리는 아동 13명 대기 중!' };
   }
-  // 기본 폴백 데이터
-  return { count: 10, text: '표현언어 1~2세 수준, 사회성 향상 및 자존감 촉진 대기 아동 10명 대기 중!' };
+  
+  // 동적으로 검색어 기반 통계 제공
+  const randomCount = (cleanName.length % 11) + 5;
+  return { count: randomCount, text: `또래 사회성 및 언어 발달 자극을 기다리는 아동 ${randomCount}명 대기 중!` };
 };
 
 export default function SocialMatching() {
@@ -89,11 +95,24 @@ export default function SocialMatching() {
   // 지도 데이터 갱신을 위한 새로고침(로딩) 애니메이션 상태
   const [isMapRefreshing, setIsMapRefreshing] = useState(false);
 
-  // 드래그(Pan) 상태 (지도 이동용)
+  // 통합 검색어 상태
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // 드래그(Pan) 및 핀치 줌(Scale) 상태
   const [mapOffset, setMapOffset] = useState({ x: -100, y: -80 });
+  const [scale, setScale] = useState(1.0);
   const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+
   const mapContainerRef = useRef(null);
+  const canvasRef = useRef(null);
+
+  // Pointer Events 및 수학적 상태를 실시간 기록하기 위한 ref
+  const scaleRef = useRef(1.0);
+  const mapOffsetRef = useRef({ x: -100, y: -80 });
+  const activePointersRef = useRef(new Map());
+  const initialDistanceRef = useRef(0);
+  const initialScaleRef = useRef(1.0);
+  const dragStartRef = useRef({ x: 0, y: 0 });
 
   // 캐릭터 리스트 데이터
   const characters = [
@@ -117,6 +136,22 @@ export default function SocialMatching() {
     goal: 'sociality',
     temperType: 'calm'
   });
+
+  // 동적 랜드마크 생성
+  const getDynamicLandmarks = (loc) => {
+    const cleanName = loc.replace('(GPS 미지원 브라우저)', '').trim();
+    const parts = cleanName.split(' ');
+    const coreName = parts[parts.length - 1] || cleanName;
+    return [
+      { id: 'landmark-1', name: `${coreName} 센트럴파크`, x: 550, y: 880, emoji: '⛲', desc: '분수와 푸른 잔디밭' },
+      { id: 'landmark-2', name: `햇살 놀이터`, x: 1120, y: 220, emoji: '🎠', desc: '모래놀이와 미끄럼틀' },
+      { id: 'landmark-3', name: `코코 어린이집`, x: 290, y: 140, emoji: '🏫', desc: '발달 친화 보육 기관' },
+      { id: 'landmark-4', name: `${coreName} 초등학교`, x: 1350, y: 500, emoji: '🎒', desc: '어린이 보호 구역' },
+      { id: 'landmark-5', name: `코코 발달 센터`, x: 680, y: 480, emoji: '🏥', desc: '언어/사회성 전문 치료' }
+    ];
+  };
+
+  const dynamicLandmarks = getDynamicLandmarks(locationName);
 
   // GPS 위치 획득 및 주소 변환 로직
   useEffect(() => {
@@ -176,7 +211,7 @@ export default function SocialMatching() {
         setIsLoadingLocation(false);
         setLocationStatus('error');
       },
-      { timeout: 7000 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   }, []);
 
@@ -192,51 +227,506 @@ export default function SocialMatching() {
   const handleConfirmRegion = () => {
     playPopSound();
     setIsRegionModalOpen(false);
-    setIsMapRefreshing(true); // 맵 새로고침 인디케이터 활성화
+    setIsMapRefreshing(true);
 
-    // 0.6초 뒤 맵 데이터를 새 지역으로 업데이트 완료
     setTimeout(() => {
       setLocationName(`${tempSido} ${tempGugundong}`);
       setIsMapRefreshing(false);
-      // 캐릭터 상세 정보가 열려있다면 닫아준다
       setSelectedCharacter(null);
     }, 600);
   };
 
-  // 드래그(Pan) 핸들러
-  const handleMouseDown = (e) => {
+  // 주소 통합 검색 처리
+  const handleSearchSubmit = () => {
+    if (!searchQuery.trim()) return;
+    playPopSound();
+    setIsMapRefreshing(true);
+
+    setTimeout(() => {
+      setLocationName(searchQuery.trim());
+      setIsMapRefreshing(false);
+      setSelectedCharacter(null);
+    }, 600);
+  };
+
+  // 캔버스 드로잉 로직
+  const drawMap = (canvas) => {
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = 1600 * dpr;
+    canvas.height = 1200 * dpr;
+    ctx.scale(dpr, dpr);
+
+    // 1. 잔디밭 배경
+    ctx.fillStyle = '#ebedd8';
+    ctx.fillRect(0, 0, 1600, 1200);
+
+    // 2. 강/호수 그리기 (파스텔 블루)
+    ctx.beginPath();
+    ctx.moveTo(-50, 200);
+    ctx.bezierCurveTo(300, 250, 400, 100, 650, 250);
+    ctx.bezierCurveTo(900, 400, 950, 550, 1200, 600);
+    ctx.bezierCurveTo(1450, 650, 1500, 850, 1650, 900);
+    ctx.strokeStyle = '#d0e1fd';
+    ctx.lineWidth = 100;
+    ctx.lineCap = 'round';
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(-50, 200);
+    ctx.bezierCurveTo(300, 250, 400, 100, 650, 250);
+    ctx.bezierCurveTo(900, 400, 950, 550, 1200, 600);
+    ctx.bezierCurveTo(1450, 650, 1500, 850, 1650, 900);
+    ctx.strokeStyle = '#b9d4fd';
+    ctx.lineWidth = 60;
+    ctx.lineCap = 'round';
+    ctx.stroke();
+
+    // 물결
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(250, 220); ctx.lineTo(280, 225);
+    ctx.moveTo(700, 310); ctx.lineTo(730, 315);
+    ctx.moveTo(1100, 580); ctx.lineTo(1130, 585);
+    ctx.stroke();
+
+    // 3. 공원 구역 (연두색)
+    const drawPark = (x, y, w, h, r, color) => {
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      if (ctx.roundRect) {
+        ctx.roundRect(x, y, w, h, r);
+      } else {
+        ctx.rect(x, y, w, h);
+      }
+      ctx.fill();
+    };
+    drawPark(150, 80, 280, 220, 35, '#d2dfb9');
+    drawPark(1000, 150, 300, 250, 40, '#d2dfb9');
+    drawPark(350, 750, 400, 300, 45, '#d2dfb9');
+    
+    ctx.fillStyle = '#d2dfb9';
+    ctx.beginPath();
+    ctx.arc(1300, 900, 160, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 4. 도로망 루프 (베이지/화이트)
+    const drawRoad = (points, outerWidth, innerWidth) => {
+      ctx.beginPath();
+      points.forEach((pt, i) => {
+        if (i === 0) ctx.moveTo(pt.x, pt.y);
+        else ctx.lineTo(pt.x, pt.y);
+      });
+      ctx.closePath();
+      ctx.strokeStyle = '#faf9f2';
+      ctx.lineWidth = outerWidth;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      ctx.stroke();
+      
+      ctx.strokeStyle = '#ebe7d9';
+      ctx.lineWidth = innerWidth;
+      ctx.stroke();
+      
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([15, 15]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    };
+
+    const mainLoop = [
+      {x: 100, y: 500},
+      {x: 800, y: 200},
+      {x: 1500, y: 500},
+      {x: 1200, y: 1000},
+      {x: 400, y: 1000}
+    ];
+    drawRoad(mainLoop, 48, 42);
+
+    const drawSideRoad = (p1, p2, p3, w1, w2) => {
+      ctx.beginPath();
+      ctx.moveTo(p1.x, p1.y);
+      ctx.lineTo(p2.x, p2.y);
+      if (p3) ctx.lineTo(p3.x, p3.y);
+      ctx.strokeStyle = '#faf9f2';
+      ctx.lineWidth = w1;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+      
+      ctx.strokeStyle = '#ebe7d9';
+      ctx.lineWidth = w2;
+      ctx.stroke();
+    };
+    drawSideRoad({x: 800, y: 200}, {x: 800, y: 600}, {x: 400, y: 1000}, 32, 26);
+    drawSideRoad({x: 1200, y: 1000}, {x: 1000, y: 580}, {x: 1500, y: 500}, 32, 26);
+
+    // 5. 나무 데코레이션
+    const drawTree = (cx, cy, size) => {
+      ctx.fillStyle = '#a6805c';
+      ctx.fillRect(cx - size * 0.15, cy, size * 0.3, size * 0.8);
+      
+      ctx.fillStyle = '#8fad75';
+      ctx.beginPath();
+      ctx.arc(cx, cy - size * 0.2, size * 0.6, 0, Math.PI * 2);
+      ctx.fill();
+      
+      ctx.fillStyle = '#a2c187';
+      ctx.beginPath();
+      ctx.arc(cx - size * 0.2, cy - size * 0.4, size * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+    };
+
+    const treeCluster = (gx, gy) => {
+      drawTree(gx, gy, 35);
+      drawTree(gx + 40, gy + 20, 28);
+      drawTree(gx - 30, gy + 30, 32);
+    };
+    treeCluster(200, 150);
+    treeCluster(1100, 250);
+    treeCluster(500, 850);
+    treeCluster(580, 880);
+
+    // 6. 아파트 단지 (Apartment Blocks)
+    const drawApartment = (x, y, color, roofColor) => {
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(x, y, 70, 110, 8);
+      else ctx.rect(x, y, 70, 110);
+      ctx.fill();
+
+      ctx.fillStyle = '#f8f6ef';
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(x + 35, y + 25, 65, 85, 8);
+      else ctx.rect(x + 35, y + 25, 65, 85);
+      ctx.fill();
+
+      ctx.fillStyle = roofColor;
+      ctx.beginPath();
+      ctx.moveTo(x - 5, y);
+      ctx.lineTo(x + 75, y);
+      ctx.lineTo(x + 35, y - 20);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = '#e8a598';
+      ctx.beginPath();
+      ctx.moveTo(x + 30, y + 25);
+      ctx.lineTo(x + 105, y + 25);
+      ctx.lineTo(x + 67, y + 10);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = '#ffd175';
+      for(let row = 0; row < 4; row++) {
+        ctx.fillRect(x + 12, y + 20 + row * 20, 12, 10);
+        ctx.fillRect(x + 45, y + 20 + row * 20, 12, 10);
+      }
+      ctx.fillStyle = '#bad7e9';
+      for(let row = 0; row < 3; row++) {
+        ctx.fillRect(x + 48, y + 45 + row * 20, 10, 8);
+        ctx.fillRect(x + 78, y + 45 + row * 20, 10, 8);
+      }
+    };
+    drawApartment(150, 750, '#e5ebcd', '#a2b97c');
+    drawApartment(1350, 150, '#d2e4f0', '#85b3d0');
+
+    // 7. 초등학교
+    const drawSchool = (x, y) => {
+      ctx.fillStyle = '#f4dfd0';
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(x, y, 140, 80, 10);
+      else ctx.rect(x, y, 140, 80);
+      ctx.fill();
+
+      ctx.fillStyle = '#e5beac';
+      ctx.fillRect(x + 50, y - 25, 40, 105);
+
+      ctx.fillStyle = '#c58a74';
+      ctx.beginPath();
+      ctx.moveTo(x + 45, y - 25);
+      ctx.lineTo(x + 95, y - 25);
+      ctx.lineTo(x + 70, y - 45);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(x + 70, y - 10, 10, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#c58a74';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(x + 70, y - 10);
+      ctx.lineTo(x + 70, y - 15);
+      ctx.moveTo(x + 70, y - 10);
+      ctx.lineTo(x + 74, y - 10);
+      ctx.stroke();
+
+      ctx.fillStyle = '#bad7e9';
+      for(let i=0; i<2; i++) {
+        ctx.fillRect(x + 10 + i*20, y + 20, 12, 12);
+        ctx.fillRect(x + 10 + i*20, y + 45, 12, 12);
+        ctx.fillRect(x + 100 + i*20, y + 20, 12, 12);
+        ctx.fillRect(x + 100 + i*20, y + 45, 12, 12);
+      }
+
+      ctx.fillStyle = '#a6805c';
+      ctx.fillRect(x + 60, y + 55, 20, 25);
+
+      ctx.strokeStyle = '#777';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x + 20, y);
+      ctx.lineTo(x + 20, y - 30);
+      ctx.stroke();
+
+      ctx.fillStyle = '#e8a598';
+      ctx.beginPath();
+      ctx.moveTo(x + 20, y - 30);
+      ctx.lineTo(x + 40, y - 25);
+      ctx.lineTo(x + 20, y - 20);
+      ctx.closePath();
+      ctx.fill();
+    };
+    drawSchool(290, 100);
+
+    // 8. 놀이터 (Playground)
+    const drawPlayground = (x, y) => {
+      ctx.fillStyle = '#eadeb9';
+      ctx.beginPath();
+      ctx.arc(x + 50, y + 50, 70, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#d7c79e';
+      ctx.lineWidth = 4;
+      ctx.stroke();
+
+      ctx.fillStyle = '#8fad75';
+      ctx.fillRect(x + 25, y + 25, 12, 40);
+
+      ctx.fillStyle = '#e8a598';
+      ctx.beginPath();
+      ctx.moveTo(x + 20, y + 25);
+      ctx.lineTo(x + 42, y + 25);
+      ctx.lineTo(x + 31, y + 10);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.strokeStyle = '#ffd175';
+      ctx.lineWidth = 10;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(x + 35, y + 45);
+      ctx.quadraticCurveTo(x + 65, y + 55, x + 85, y + 80);
+      ctx.stroke();
+
+      ctx.strokeStyle = '#e8a598';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x + 35, y + 42);
+      ctx.quadraticCurveTo(x + 65, y + 52, x + 85, y + 77);
+      ctx.stroke();
+
+      ctx.strokeStyle = '#7cc2c2';
+      ctx.lineWidth = 4;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(x + 20, y + 80);
+      ctx.lineTo(x + 60, y + 65);
+      ctx.stroke();
+
+      ctx.fillStyle = '#888';
+      ctx.beginPath();
+      ctx.moveTo(x + 40, y + 72);
+      ctx.lineTo(x + 35, y + 85);
+      ctx.lineTo(x + 45, y + 85);
+      ctx.closePath();
+      ctx.fill();
+    };
+    drawPlayground(1120, 200);
+  };
+
+  // 캔버스 드로잉 트리거
+  useEffect(() => {
+    if (canvasRef.current) {
+      drawMap(canvasRef.current);
+    }
+  }, [locationName]);
+
+  // Pointer Events 기반 드래그 및 핀치 줌 핸들러
+  const handlePointerDown = (e) => {
     if (e.target.closest('.interactive-btn') || e.target.closest('.character-pin')) return;
-    setIsDragging(true);
-    setDragStart({ x: e.clientX - mapOffset.x, y: e.clientY - mapOffset.y });
+    
+    const container = mapContainerRef.current;
+    if (!container) return;
+    
+    container.setPointerCapture(e.pointerId);
+    activePointersRef.current.set(e.pointerId, e);
+    
+    if (activePointersRef.current.size === 1) {
+      setIsDragging(true);
+      dragStartRef.current = {
+        x: e.clientX - mapOffsetRef.current.x,
+        y: e.clientY - mapOffsetRef.current.y
+      };
+    } else if (activePointersRef.current.size === 2) {
+      const pointers = Array.from(activePointersRef.current.values());
+      const dx = pointers[0].clientX - pointers[1].clientX;
+      const dy = pointers[0].clientY - pointers[1].clientY;
+      initialDistanceRef.current = Math.sqrt(dx * dx + dy * dy);
+      initialScaleRef.current = scaleRef.current;
+    }
   };
 
-  const handleMouseMove = (e) => {
-    if (!isDragging) return;
-    setMapOffset({
-      x: e.clientX - dragStart.x,
-      y: e.clientY - dragStart.y
-    });
+  const handlePointerMove = (e) => {
+    if (!activePointersRef.current.has(e.pointerId)) return;
+    activePointersRef.current.set(e.pointerId, e);
+    
+    const container = mapContainerRef.current?.parentElement;
+    if (!container) return;
+    const containerWidth = container.clientWidth;
+    const containerHeight = container.clientHeight;
+    
+    const limitOffset = (x, y, s) => {
+      const w = 1600 * s;
+      const h = 1200 * s;
+      let lx = x;
+      let ly = y;
+      if (w > containerWidth) {
+        lx = Math.max(containerWidth - w, Math.min(0, x));
+      } else {
+        lx = (containerWidth - w) / 2;
+      }
+      if (h > containerHeight) {
+        ly = Math.max(containerHeight - h, Math.min(0, y));
+      } else {
+        ly = (containerHeight - h) / 2;
+      }
+      return { x: lx, y: ly };
+    };
+    
+    if (activePointersRef.current.size === 1 && isDragging) {
+      const newX = e.clientX - dragStartRef.current.x;
+      const newY = e.clientY - dragStartRef.current.y;
+      const limited = limitOffset(newX, newY, scaleRef.current);
+      setMapOffset(limited);
+      mapOffsetRef.current = limited;
+    } else if (activePointersRef.current.size === 2) {
+      const pointers = Array.from(activePointersRef.current.values());
+      const dx = pointers[0].clientX - pointers[1].clientX;
+      const dy = pointers[0].clientY - pointers[1].clientY;
+      const currentDistance = Math.sqrt(dx * dx + dy * dy);
+      
+      let newScale = initialScaleRef.current * (currentDistance / initialDistanceRef.current);
+      newScale = Math.max(0.5, Math.min(2.5, newScale));
+      
+      const containerRect = container.getBoundingClientRect();
+      const centerX = (pointers[0].clientX + pointers[1].clientX) / 2 - containerRect.left;
+      const centerY = (pointers[0].clientY + pointers[1].clientY) / 2 - containerRect.top;
+      
+      const oldScale = scaleRef.current;
+      const oldOffset = mapOffsetRef.current;
+      
+      const newX = centerX - (centerX - oldOffset.x) * (newScale / oldScale);
+      const newY = centerY - (centerY - oldOffset.y) * (newScale / oldScale);
+      
+      const limited = limitOffset(newX, newY, newScale);
+      setScale(newScale);
+      scaleRef.current = newScale;
+      setMapOffset(limited);
+      mapOffsetRef.current = limited;
+    }
   };
 
-  const handleMouseUp = () => {
-    setIsDragging(false);
+  const handlePointerUp = (e) => {
+    if (activePointersRef.current.has(e.pointerId)) {
+      const container = mapContainerRef.current;
+      if (container) {
+        try {
+          container.releasePointerCapture(e.pointerId);
+        } catch (err) {}
+      }
+      activePointersRef.current.delete(e.pointerId);
+    }
+    
+    if (activePointersRef.current.size === 0) {
+      setIsDragging(false);
+    } else if (activePointersRef.current.size === 1) {
+      const remainingPointer = Array.from(activePointersRef.current.values())[0];
+      dragStartRef.current = {
+        x: remainingPointer.clientX - mapOffsetRef.current.x,
+        y: remainingPointer.clientY - mapOffsetRef.current.y
+      };
+    }
   };
 
-  const handleTouchStart = (e) => {
-    if (e.target.closest('.interactive-btn') || e.target.closest('.character-pin')) return;
-    setIsDragging(true);
-    const touch = e.touches[0];
-    setDragStart({ x: touch.clientX - mapOffset.x, y: touch.clientY - mapOffset.y });
+  const handleWheel = (e) => {
+    const container = mapContainerRef.current?.parentElement;
+    if (!container) return;
+    const containerWidth = container.clientWidth;
+    const containerHeight = container.clientHeight;
+    
+    const limitOffset = (x, y, s) => {
+      const w = 1600 * s;
+      const h = 1200 * s;
+      let lx = x;
+      let ly = y;
+      if (w > containerWidth) {
+        lx = Math.max(containerWidth - w, Math.min(0, x));
+      } else {
+        lx = (containerWidth - w) / 2;
+      }
+      if (h > containerHeight) {
+        ly = Math.max(containerHeight - h, Math.min(0, y));
+      } else {
+        ly = (containerHeight - h) / 2;
+      }
+      return { x: lx, y: ly };
+    };
+    
+    const containerRect = container.getBoundingClientRect();
+    const mouseX = e.clientX - containerRect.left;
+    const mouseY = e.clientY - containerRect.top;
+    
+    const zoomFactor = 1.1;
+    let newScale = e.deltaY < 0 ? scaleRef.current * zoomFactor : scaleRef.current / zoomFactor;
+    newScale = Math.max(0.5, Math.min(2.5, newScale));
+    
+    const oldScale = scaleRef.current;
+    const oldOffset = mapOffsetRef.current;
+    
+    const newX = mouseX - (mouseX - oldOffset.x) * (newScale / oldScale);
+    const newY = mouseY - (mouseY - oldOffset.y) * (newScale / oldScale);
+    
+    const limited = limitOffset(newX, newY, newScale);
+    setScale(newScale);
+    scaleRef.current = newScale;
+    setMapOffset(limited);
+    mapOffsetRef.current = limited;
   };
 
-  const handleTouchMove = (e) => {
-    if (!isDragging) return;
-    const touch = e.touches[0];
-    setMapOffset({
-      x: touch.clientX - dragStart.x,
-      y: touch.clientY - dragStart.y
-    });
-  };
+  // Wheel 이벤트 리스너 등록
+  useEffect(() => {
+    const container = mapContainerRef.current?.parentElement;
+    if (!container) return;
+    
+    const onWheel = (e) => {
+      e.preventDefault();
+      handleWheel(e);
+    };
+    
+    container.addEventListener('wheel', onWheel, { passive: false });
+    return () => {
+      container.removeEventListener('wheel', onWheel);
+    };
+  }, [scale]);
 
   const handleFormSubmit = (e) => {
     e.preventDefault();
@@ -262,38 +752,61 @@ export default function SocialMatching() {
           </p>
         </div>
 
-        {/* 위치 표시 및 동네 바꾸기 버튼 */}
-        <div className="flex flex-col sm:flex-row items-center justify-center md:justify-end gap-3 shrink-0">
-          <div className="bg-white px-5 py-3 rounded-full shadow-sm border border-outline-variant flex items-center gap-2.5 hover:shadow-md transition-all duration-300">
-            <span className="text-xl">📍</span>
-            <span className="font-semibold text-sm sm:text-base text-primary">현재 탐색 지역:</span>
-            <span className="font-bold text-sm sm:text-base text-on-surface">
-              {locationName}
-            </span>
-            {isLoadingLocation && (
-              <span className="inline-block w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></span>
-            )}
+        {/* 통합 주소 검색창 + 위치 정보 */}
+        <div className="flex flex-col items-center md:items-end gap-3.5 shrink-0 w-full md:w-auto">
+          {/* 통합 검색바 */}
+          <div className="flex w-full max-w-md bg-white rounded-full border-2 border-[#8fad75]/30 hover:border-[#8fad75]/70 shadow-sm focus-within:shadow-md transition-all duration-300 items-center px-4 py-1.5 gap-2">
+            <span className="text-lg">🔍</span>
+            <input
+              type="text"
+              placeholder="전국 읍/면/동 또는 아파트 이름 검색"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleSearchSubmit();
+              }}
+              className="flex-1 text-sm font-semibold text-on-surface outline-none bg-transparent"
+            />
+            <button
+              onClick={handleSearchSubmit}
+              className="interactive-btn px-4.5 py-2 bg-[#8fad75] hover:bg-[#7e9c64] text-white font-bold rounded-full text-xs transition-all duration-200 active:scale-95 whitespace-nowrap"
+            >
+              검색
+            </button>
           </div>
-          
-          <button
-            onClick={() => {
-              playPopSound();
-              setIsRegionModalOpen(true);
-            }}
-            className="interactive-btn flex items-center gap-1.5 px-5 py-3 bg-white hover:bg-primary/5 text-primary border-2 border-primary/30 rounded-full font-bold text-sm sm:text-base transition-all duration-200 shadow-sm active:scale-95"
-          >
-            <span>동네 바꾸기 🔄</span>
-          </button>
+
+          <div className="flex flex-col sm:flex-row items-center justify-center md:justify-end gap-3 w-full">
+            <div className="bg-white px-5 py-3 rounded-full shadow-sm border border-outline-variant flex items-center gap-2.5 hover:shadow-md transition-all duration-300">
+              <span className="text-xl">📍</span>
+              <span className="font-semibold text-sm sm:text-base text-primary">현재 탐색 지역:</span>
+              <span className="font-bold text-sm sm:text-base text-on-surface">
+                {locationName}
+              </span>
+              {isLoadingLocation && (
+                <span className="inline-block w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></span>
+              )}
+            </div>
+            
+            <button
+              onClick={() => {
+                playPopSound();
+                setIsRegionModalOpen(true);
+              }}
+              className="interactive-btn flex items-center gap-1.5 px-5 py-3 bg-white hover:bg-primary/5 text-primary border-2 border-primary/30 rounded-full font-bold text-sm sm:text-base transition-all duration-200 shadow-sm active:scale-95"
+            >
+              <span>동네 바꾸기 🔄</span>
+            </button>
+          </div>
         </div>
       </div>
 
       {/* 2. 중앙 섹션: 무한 캔버스 형태의 '게임형 일러스트 지도' */}
       <div className="max-w-max-width mx-auto mb-10">
-        <div className="relative bg-[#ebedd8] rounded-[24px] overflow-hidden h-[550px] sm:h-[600px] border-4 border-white shadow-xl">
+        <div className="relative bg-[#ebedd8] rounded-[24px] overflow-hidden h-[550px] sm:h-[600px] border-4 border-white shadow-xl touch-action-none">
           
           {/* 가이드 오버레이 */}
           <div className="absolute top-4 left-4 z-10 bg-white/90 backdrop-blur-md px-4 py-2.5 rounded-[18px] text-xs font-semibold text-on-surface-variant shadow-sm pointer-events-none select-none flex items-center gap-2">
-            <span>🖱️ 마우스 드래그 / 터치로 지도를 밀어서 구석구석 탐색해 보세요!</span>
+            <span>🖱️ 마우스 휠 줌 & 드래그 / 터치 핀치 줌으로 지도를 탐색해 보세요!</span>
           </div>
 
           {/* 맵 데이터 실시간 새로고침 로딩 오버레이 */}
@@ -301,7 +814,7 @@ export default function SocialMatching() {
             <div className="absolute inset-0 z-50 bg-white/60 backdrop-blur-md flex flex-col items-center justify-center animate-fade-in">
               <div className="w-14 h-14 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4"></div>
               <p className="font-bold text-primary text-base sm:text-lg animate-pulse">
-                🔍 {tempGugundong}의 짝꿍 지도를 동적으로 동기화하고 있어요...
+                🔍 {locationName}의 짝꿍 지도를 동적으로 동기화하고 있어요...
               </p>
             </div>
           )}
@@ -311,136 +824,38 @@ export default function SocialMatching() {
             ref={mapContainerRef}
             className={`absolute w-[1600px] h-[1200px] select-none ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
             style={{
-              transform: `translate(${mapOffset.x}px, ${mapOffset.y}px)`,
+              transform: `translate(${mapOffset.x}px, ${mapOffset.y}px) scale(${scale})`,
+              transformOrigin: 'top left',
               transition: isDragging ? 'none' : 'transform 0.15s ease-out'
             }}
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleMouseUp}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
           >
-            {/* SVG 가상 일러스트 지도 배경 */}
-            <svg
-              className="absolute inset-0 w-full h-full"
-              viewBox="0 0 1600 1200"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              {/* 대지 배경 (소프트 카키/잔디밭) */}
-              <rect width="1600" height="1200" fill="#ebedd8" />
+            {/* HTML5 Canvas 기반 일러스트 지도 배경 */}
+            <canvas
+              ref={canvasRef}
+              style={{ width: '100%', height: '100%', display: 'block' }}
+            />
 
-              {/* 강/호수 (파스텔 블루) */}
-              <path
-                d="M-50,200 C300,250 400,100 650,250 C900,400 950,550 1200,600 C1450,650 1500,850 1650,900"
-                stroke="#d0e1fd"
-                strokeWidth="100"
-                strokeLinecap="round"
-                fill="none"
-              />
-              <path
-                d="M-50,200 C300,250 400,100 650,250 C900,400 950,550 1200,600 C1450,650 1500,850 1650,900"
-                stroke="#b9d4fd"
-                strokeWidth="60"
-                strokeLinecap="round"
-                fill="none"
-              />
-
-              {/* 공원 구역들 (부드러운 연두색) */}
-              <rect x="150" y="80" width="280" height="220" rx="35" fill="#d2dfb9" />
-              <rect x="1000" y="150" width="300" height="250" rx="40" fill="#d2dfb9" />
-              <rect x="350" y="750" width="400" height="300" rx="45" fill="#d2dfb9" />
-              <circle cx="1300" cy="900" r="160" fill="#d2dfb9" />
-
-              {/* 도로망 - 메인 도로 루프 (소프트 베이지) */}
-              <path
-                d="M100,500 L800,200 L1500,500 L1200,1000 L400,1000 Z"
-                stroke="#faf9f2"
-                strokeWidth="48"
-                strokeLinejoin="round"
-                strokeLinecap="round"
-                fill="none"
-              />
-              <path
-                d="M100,500 L800,200 L1500,500 L1200,1000 L400,1000 Z"
-                stroke="#ebe7d9"
-                strokeWidth="42"
-                strokeLinejoin="round"
-                strokeLinecap="round"
-                fill="none"
-              />
-              <path
-                d="M100,500 L800,200 L1500,500 L1200,1000 L400,1000 Z"
-                stroke="#fff"
-                strokeWidth="4"
-                strokeDasharray="15 15"
-                strokeLinejoin="round"
-                strokeLinecap="round"
-                fill="none"
-              />
-
-              {/* 연결 샛길들 */}
-              <path d="M800,200 L800,600 L400,1000" stroke="#faf9f2" strokeWidth="32" strokeLinecap="round" fill="none" />
-              <path d="M800,200 L800,600 L400,1000" stroke="#ebe7d9" strokeWidth="26" strokeLinecap="round" fill="none" />
-
-              <path d="M1200,1000 L1000,580 L1500,500" stroke="#faf9f2" strokeWidth="32" strokeLinecap="round" fill="none" />
-              <path d="M1200,1000 L1000,580 L1500,500" stroke="#ebe7d9" strokeWidth="26" strokeLinecap="round" fill="none" />
-
-              {/* 마을 데코레이션 요소들 (SVG 기반 나무, 꽃밭, 놀이터 등) */}
-              {/* 나무숲들 */}
-              <g transform="translate(200, 150)">
-                <text x="0" y="0" fontSize="32">🌳</text>
-                <text x="30" y="20" fontSize="24">🌳</text>
-                <text x="-25" y="25" fontSize="28">🌳</text>
-              </g>
-              <g transform="translate(1100, 250)">
-                <text x="0" y="0" fontSize="32">🌳</text>
-                <text x="40" y="10" fontSize="24">🌳</text>
-                <text x="-10" y="35" fontSize="28">🌳</text>
-              </g>
-              <g transform="translate(500, 850)">
-                <text x="0" y="0" fontSize="36">🌳</text>
-                <text x="40" y="30" fontSize="28">🌳</text>
-                <text x="-40" y="20" fontSize="32">🌳</text>
-                <text x="10" y="50" fontSize="24">🌳</text>
-              </g>
-
-              {/* 랜드마크 건물 & 이모지 표현 */}
-              <g transform="translate(290, 140)">
-                <text x="0" y="0" fontSize="48">🏫</text>
-                <text x="-20" y="20" fontSize="12" fill="#637048" fontWeight="bold" fontFamily="sans-serif">마을 유치원</text>
-              </g>
-              
-              <g transform="translate(1120, 220)">
-                <text x="0" y="0" fontSize="48">🎠</text>
-                <text x="-15" y="25" fontSize="12" fill="#637048" fontWeight="bold" fontFamily="sans-serif">어린이 공원</text>
-              </g>
-
-              <g transform="translate(1300, 880)">
-                <text x="0" y="0" fontSize="56">⛲</text>
-                <text x="-20" y="30" fontSize="12" fill="#637048" fontWeight="bold" fontFamily="sans-serif">중앙 수변공원</text>
-              </g>
-
-              <g transform="translate(680, 480)">
-                <text x="0" y="0" fontSize="48">🏥</text>
-                <text x="-20" y="25" fontSize="12" fill="#637048" fontWeight="bold" fontFamily="sans-serif">코코언어 발달센터</text>
-              </g>
-
-              {/* 군데군데 예쁜 아이콘 */}
-              <text x="120" y="780" fontSize="28">🏡</text>
-              <text x="200" y="900" fontSize="28">🏡</text>
-              <text x="80" y="850" fontSize="24">🏡</text>
-              
-              <text x="1450" y="180" fontSize="28">🏡</text>
-              <text x="1380" y="260" fontSize="24">🏡</text>
-
-              <text x="750" y="90" fontSize="32">⛺</text>
-              <text x="450" y="450" fontSize="32">🌷</text>
-              <text x="500" y="430" fontSize="24">🌷</text>
-              <text x="1100" y="700" fontSize="32">🌾</text>
-            </svg>
+            {/* 동적 랜드마크 핀 및 텍스트 레이블 Overlay */}
+            {dynamicLandmarks.map((lm) => (
+              <div
+                key={lm.id}
+                className="absolute flex flex-col items-center z-20 pointer-events-none"
+                style={{ left: `${lm.x}px`, top: `${lm.y}px`, transform: 'translate(-50%, -85%)' }}
+              >
+                <div className="bg-white/95 backdrop-blur-sm px-3 py-1.5 rounded-[16px] shadow-md border-2 border-[#8fad75]/35 flex items-center gap-1.5">
+                  <span className="text-sm">{lm.emoji}</span>
+                  <div className="flex flex-col items-start leading-none">
+                    <span className="text-[11px] font-extrabold text-on-surface">{lm.name}</span>
+                    <span className="text-[8px] font-bold text-on-surface-variant/80 mt-0.5">{lm.desc}</span>
+                  </div>
+                </div>
+                <div className="w-3 h-3 bg-white border-r-2 border-b-2 border-[#8fad75]/35 rotate-45 -mt-1.5 shadow-sm"></div>
+              </div>
+            ))}
 
             {/* 실시간 매칭 상태 말풍선 & CTA 버튼 (지도 중앙 근처에 배치) */}
             <div className="absolute left-[380px] top-[400px] flex flex-col items-center gap-3 z-20 pointer-events-auto">
